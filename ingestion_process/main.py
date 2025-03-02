@@ -1,8 +1,9 @@
 import logging
 
+from configs.configs import LOGGER_FORMAT
 from modules.ingestion_process import run_process
 from utils import arg_parser
-from configs.configs import LOGGER_FORMAT
+
 
 def main(args):
     run_process(args)

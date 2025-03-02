@@ -12,10 +12,8 @@ from utils.exceptions import VideoExtractionError
 
 _logger = logging.getLogger(__name__)
 
-# import ssl
-# ssl._create_default_https_context = ssl._create_unverified_context
 
-openai.api_key =  os.environ["OPENAI_API_KEY"]
+openai.api_key = os.environ["OPENAI_API_KEY"]
 
 
 def download_video(video_id: str):
@@ -25,7 +23,7 @@ def download_video(video_id: str):
         yt = YouTube(video_url, on_progress_callback=on_progress)
     except Exception as e:
         _logger.error(e)
-        raise VideoExtractionError("Error extracting video")
+        raise VideoExtractionError("Error extracting video") from e
     return yt
 
 
@@ -61,7 +59,7 @@ def perform_audio_transcription(video_id: str, audio_file_path: str):
         transcript = _transcribe_with_backoff(model="whisper-1", file=fb, language="en")
         transcript_text = transcript["text"]
 
-        with open(audio_file_path, "w", encoding="utf-8") as f:
-            json.dump({"video_id": video_id, "text": transcript_text}, f)
+    with open(json_file_path, "w", encoding="utf-8") as f:
+        json.dump({"video_id": video_id, "text": transcript_text}, f)
 
-    return json_file_path
+    return json_file_path, json_tmpdirname

@@ -13,14 +13,12 @@ def _get_db_credentials() -> dict:
 
     return {
         "host": credentials[0],
-        "username": credentials[1],
+        "user": credentials[1],
         "password": credentials[2],
-        "database": credentials[3],
+        "dbname": credentials[3],
         "port": credentials[4],
     }
 
-import psycopg2
-import json
 
 def load_to_postgres(json_file_path: str):
     """
@@ -42,11 +40,8 @@ def load_to_postgres(json_file_path: str):
     with open(json_file_path, "r") as f:
         data = json.load(f)
 
-    for item in data:
-        cursor.execute(
-            "INSERT INTO videos (video_id, transcript) VALUES (%s, %s)",
-            (item["video_id"], item["text"])
-        )
+    query = "INSERT INTO transcriptions.videos (video_id, text) VALUES (%s, %s)"
+    cursor.execute(query, (data["video_id"], data["text"]))
 
     conn.commit()
     cursor.close()
