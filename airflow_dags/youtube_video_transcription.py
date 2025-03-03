@@ -10,7 +10,7 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.utils.trigger_rule import TriggerRule
 from youtube_transcription.configs import configs
 from youtube_transcription.input_params import PARAMS
-from youtube_transcription.queries import GET_VIDEOS_BY_KEYWORD
+from youtube_transcription.queries import GET_VIDEOS_BY_KEYWORD, GET_VIDEOS_EXISTENCE
 
 ENV = Variable.get("env")
 logger = logging.getLogger(__name__)
@@ -29,8 +29,18 @@ dag_parameters = {
 
 
 @task
-def get_transcription_execution_arguments(**context):
+def check_if_video_id_exist(**context):
     video_ids = context.get("params").get("video_ids")
+    hook = PostgresHook(postgres_conn_id=configs.POSTGRES_CONN_ID.get(ENV))
+    query = GET_VIDEOS_EXISTENCE.format(video_ids=str(video_ids).replace("[", "").replace("]", ""))
+    logger.info(query)
+    result = hook.get_records(query)
+    return [x[0] for x in result]
+
+
+@task
+def get_transcription_execution_arguments(**context):
+    video_ids = context.get("ti").xcom_pull(task_ids="check_if_video_id_exist")
     overrides_list = []
 
     for video_id in video_ids:
@@ -80,6 +90,9 @@ def execute_transcription_aws():
 @task(trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS)
 def get_related_videos(**context):
     video_ids = context.get("params").get("keywords")
+    if not video_ids:
+        logger.info("No keywords provided")
+        return
     logger.info(video_ids)
     hook = PostgresHook(postgres_conn_id=configs.POSTGRES_CONN_ID.get(ENV))
     query = GET_VIDEOS_BY_KEYWORD.format(keywords="|".join(video_ids))
@@ -91,21 +104,26 @@ def get_related_videos(**context):
 
 @task.branch()
 def cloud_selection_branch(**context):
-    if context.get("params").get("cloud") == "gcp":
+    video_ids = context.get("ti").xcom_pull(task_ids="check_if_video_id_exist")
+    if context.get("params").get("cloud") == "gcp" and video_ids:
         return "execute_transcription_gcp.get_transcription_execution_arguments"
-    return "execute_transcription_aws.get_transcription_execution_arguments"
+    elif context.get("params").get("cloud") == "aws" and video_ids:
+        return "execute_transcription_aws.get_transcription_execution_arguments"
+    return "get_related_videos"
 
 
 @dag(**dag_parameters)
 def dag():
     start = EmptyOperator(task_id="start")
     end = EmptyOperator(task_id="end")
+    check_if_video_id_exist_task = check_if_video_id_exist()
     branch = cloud_selection_branch()
     execute_transcription_aws_task = execute_transcription_aws()
     execute_transcription_gcp_task = execute_transcription_gcp()
     get_video_ids = get_related_videos()
 
-    start >> branch >> [execute_transcription_aws_task, execute_transcription_gcp_task] >> get_video_ids >> end
+    start >> check_if_video_id_exist_task >> branch
+    branch >> [execute_transcription_aws_task, execute_transcription_gcp_task] >> get_video_ids >> end
 
 
 dag()
