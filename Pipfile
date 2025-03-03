@@ -8,6 +8,10 @@ tenacity="8.2.2"
 pytubefix="8.12.2"
 openai="0.28"
 psycopg2-binary = "2.9.10"
+apache-airflow = "14.0.0"
+apache-airflow-providers-google = "*"
+apache-airflow-providers-postgres = "2.10.5"
+apache-airflow-providers-amazon = "9.4.0"
 
 [dev-packages]
 pre-commit = "4.0.1"
